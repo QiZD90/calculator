@@ -3,7 +3,17 @@ import { DivideIcon } from '@/components/icons/DivideIcon';
 import { MultiplyIcon } from '@/components/icons/MultiplyIcon';
 import { PlusMinusIcon } from '@/components/icons/PlusMinusIcon';
 import { RoundBracketsIcon } from '@/components/icons/RoundBracketsIcon';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import {
+  Token,
+  Operator,
+  expressionToString,
+  isOperator,
+  isBracket,
+  isNumber,
+  noUnclosedBrackets,
+  closeUnclosedBrackets,
+} from '@/lib/tokens';
 
 function History({ history }: { history: string }) {
   return (
@@ -11,23 +21,6 @@ function History({ history }: { history: string }) {
       {history}
     </div>
   );
-}
-
-function expressionToString(expression: Token[]): string {
-  let expressionStr = '';
-  for (let t of expression) {
-    if (isNumber(t)) {
-      expressionStr += String(t);
-    } else if (isBracket(t)) {
-      expressionStr += String(t);
-    } else if (t == Operator.UnaryMinus) {
-      expressionStr += '-';
-    } else if (isOperator(t)) {
-      expressionStr += ' ' + String(t) + ' ';
-    }
-  }
-
-  return expressionStr;
 }
 
 function Expression({ expression }: { expression: Token[] }) {
@@ -67,60 +60,27 @@ function Key({
   );
 }
 
-enum Operator {
-  Plus = '+',
-  Minus = '-',
-  UnaryMinus = '--',
-  Divide = '/',
-  Multiply = '*',
-  BracketOpen = '(',
-  BracketClose = ')',
-}
-
-type TokenNumber = string;
-
-type Token = TokenNumber | Operator;
-
-function isOperator(t: Token): boolean {
-  return Object.values(Operator)
-    .map((o) => o.toString())
-    .includes(t);
-}
-
-function isBracket(t: Token): boolean {
-  return t == Operator.BracketClose || t == Operator.BracketOpen;
-}
-
-function isNumber(t: Token): boolean {
-  return !isOperator(t);
-}
-
-function noUnclosedBrackets(ts: Token[]): boolean {
-  let brackets = 0;
-
-  for (let t of ts) {
-    if (t == Operator.BracketOpen) {
-      brackets++;
-    } else if (t == Operator.BracketClose) {
-      brackets--;
-    }
-  }
-
-  return brackets <= 0;
-}
-
 function Keyboard({
   setCurrentExpression,
   setHistory,
-  calculate,
 }: {
   setCurrentExpression: React.Dispatch<React.SetStateAction<Token[]>>;
   setHistory: React.Dispatch<React.SetStateAction<string>>;
-  calculate: any;
 }) {
   let clear = () => {
     setCurrentExpression(['0']);
     setHistory('');
+  };
+
+  let calculate = () => {
+    setCurrentExpression((prev) => {
+      let expr = closeUnclosedBrackets(prev);
+
+      let result = eval(expressionToString(expr)); // TODO: heck no, eval is evil
+      setHistory(expressionToString(expr) + ' = ' + result);
+
+      return [result];
+    });
   };
 
   let addDigit = (n: string) => {
@@ -223,6 +183,11 @@ function Keyboard({
           prev[prev.length - 3] == Operator.BracketOpen
         ) {
           return [...prev.slice(0, -3), last];
+        }
+
+        if (prev.length >= 2 && prev[prev.length - 2] == Operator.UnaryMinus) {
+          // TODO: when proper eval is implemented, negative numbers should be UNARY MINUS + number
+          return [...prev.slice(0, -2), last];
         }
 
         return [
@@ -342,12 +307,6 @@ export default () => {
   let [currentExpression, setCurrentExpression] = useState(['0'] as Token[]);
   let [history, setHistory] = useState('');
 
-  let calculate = () => {
-    let result = eval(expressionToString(currentExpression)); // TODO: heck no, eval is evil
-    setHistory(expressionToString(currentExpression) + ' = ' + result);
-    setCurrentExpression([result]);
-  };
-
   return (
     <div className='flex w-svw h-svh justify-center'>
       <div className='flex flex-col w-full lg:w-1/2 h-full px-10 py-10'>
@@ -358,7 +317,6 @@ export default () => {
           <Keyboard
             setCurrentExpression={setCurrentExpression}
             setHistory={setHistory}
-            calculate={calculate}
           />
         </div>
       </div>
